@@ -69,8 +69,78 @@ bool gl_log_err (const char* message, ...) {
   return true;
 }
 
+void log_gl_params () {
+  GLenum params[] = {
+    GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS,
+    GL_MAX_CUBE_MAP_TEXTURE_SIZE,
+    GL_MAX_DRAW_BUFFERS,
+    GL_MAX_FRAGMENT_UNIFORM_COMPONENTS,
+    GL_MAX_TEXTURE_IMAGE_UNITS,
+    GL_MAX_TEXTURE_SIZE,
+    GL_MAX_VARYING_FLOATS,
+    GL_MAX_VERTEX_ATTRIBS,
+    GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS,
+    GL_MAX_VERTEX_UNIFORM_COMPONENTS,
+    GL_MAX_VIEWPORT_DIMS,
+    GL_STEREO,
+  };
+
+  const char* names[] = {
+    "GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS",
+    "GL_MAX_CUBE_MAP_TEXTURE_SIZE",
+    "GL_MAX_DRAW_BUFFERS",
+    "GL_MAX_FRAGMENT_UNIFORM_COMPONENTS",
+    "GL_MAX_TEXTURE_IMAGE_UNITS",
+    "GL_MAX_TEXTURE_SIZE",
+    "GL_MAX_VARYING_FLOATS",
+    "GL_MAX_VERTEX_ATTRIBS",
+    "GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS",
+    "GL_MAX_VERTEX_UNIFORM_COMPONENTS",
+    "GL_MAX_VIEWPORT_DIMS",
+    "GL_STEREO",
+  };
+
+  gl_log ("GL Context Params:\n");
+  // integers - only works if the order is 0-10 integer return types
+  for (int i = 0; i < 10; i++) {
+    int v = 0;
+    glGetIntegerv (params[i], &v);
+    gl_log ("%s %i\n", names[i], v);
+  }
+  // others
+  int v[2];
+  v[0] = v[1] = 0;
+  glGetIntegerv (params[10], v);
+  gl_log ("%s %i %i\n", names[10], v[0], v[1]);
+
+  unsigned char s = 0;
+  glGetBooleanv (params[11], &s);
+  gl_log ("%s %u\n", names[11], (unsigned int) s);
+  gl_log ("-----------------------------\n");
+}
+
 void gflw_error_callback (int error, const char* description) {
   gl_log_err ("GLFW ERROR: code %i msg: %s\n", error, description);
+}
+
+// reported window size may be good to know for a few things
+int g_win_width  = 640;
+int g_win_height = 480;
+
+// keep track of framebuffer size for things like the viewport and the mouse cursor
+int g_fb_width   = 640;
+int g_fb_height = 480;
+
+void glfw_window_size_callback (GLFWwindow* window, int width, int height) {
+  g_win_width = width;
+  g_win_height = height;
+}
+
+void glfw_framebuffer_size_callback (GLFWwindow* window, int width, int height) {
+  g_fb_width = width;
+  g_fb_height = height;
+
+  /* later update any perpective matrices used here */
 }
 
 int main() {
@@ -86,9 +156,18 @@ int main() {
     return 1;
   }
 
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4); 
+  glfwWindowHint (GLFW_CONTEXT_VERSION_MAJOR, 4); 
+  glfwWindowHint (GLFW_SAMPLES, 4);
 
-  GLFWwindow* window = glfwCreateWindow (640, 480, "Hello Triangle", NULL, NULL);
+  GLFWmonitor* mon = glfwGetPrimaryMonitor ();
+  const GLFWvidmode* vmode = glfwGetVideoMode (mon);
+  GLFWwindow* window = glfwCreateWindow (vmode->width, 
+                                         vmode->height,
+                                         "Extended GL Int",
+                                         mon, NULL);
+  
+  glfwSetWindowSizeCallback(window, glfw_window_size_callback);
+  glfwSetFramebufferSizeCallback(window, glfw_framebuffer_size_callback);
 
   if (!window) {
     fprintf(stderr, "ERROR: could not open window with GLFW3\n");
@@ -106,6 +185,7 @@ int main() {
   const GLubyte* version = glGetString (GL_VERSION);
   printf ("Renderer: %s\n", renderer);
   printf ("Opengl version supperted %s\n", version);
+  log_gl_params();
 
   // teel GL to only draw onto a pixel if the shape is closer to the viewer
   glEnable (GL_DEPTH_TEST); // enable depth-testing
@@ -159,6 +239,7 @@ int main() {
   while (!glfwWindowShouldClose (window)) {
     // wipe the drawing surface clear
     glClear (GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glViewport (0, 0, g_fb_width, g_fb_height);
     glUseProgram (shader_program);
     glBindVertexArray (vao);
 
@@ -168,6 +249,10 @@ int main() {
     glfwPollEvents ();
     // put the stuff we've been drawing onto the display 
     glfwSwapBuffers (window);
+
+    if (GLFW_PRESS == glfwGetKey (window, GLFW_KEY_ESCAPE)) {
+      glfwSetWindowShouldClose (window, 1);
+    }
   }
 
   // close GL context and any other GLFW resources
